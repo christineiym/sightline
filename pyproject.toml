@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sightline"
+version = "0.0.1"
+authors = [
+  { name="Christine Mendoza", email="christineiymendoza@gmail.com" },
+]
+description = "A simple package for parametrizable, procedural generation of VLM test workflows."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+dependencies = [
+    "numpy",
+    "pandas"
+]
+
+[project.optional-dependencies]
+ollama = ["ollama"]
+openai = ["openai"]
+
+[project.urls]
+Homepage = "https://github.com/christineiym/sightline"
+Issues = "https://github.com/christineiym/sightline/issues"
