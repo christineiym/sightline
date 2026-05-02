@@ -81,6 +81,10 @@ class DiscreteRangeCharacteristic(Characteristic):
     @property
     def max(self) -> int:
         return self._domain.max
+    
+    @property
+    def unit(self) -> int:
+        return self._domain.unit
 
 
 class CategoricalCharacteristic(Characteristic):

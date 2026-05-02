@@ -29,3 +29,6 @@ openai = ["openai"]
 [project.urls]
 Homepage = "https://github.com/christineiym/sightline"
 Issues = "https://github.com/christineiym/sightline/issues"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
