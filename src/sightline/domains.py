@@ -30,13 +30,11 @@ class Domain(ABC, Generic[T]):
         
         For more details, see Domain._systematic_sample_from_range.
         """
-        return Domain._systematic_sample_from_range(*args, **kwargs)
+        pass
 
-    @staticmethod
-    def _systematic_sample_from_range(min, max, step: int = None, n_max: int = None) -> List[T]:
+    def _systematic_sample_from_range(self, min, max, step: int = None, n_max: int = None) -> List[T]:
         """Draw a systematic sample of at most n_max equidistant elements, separated by some multiple of step.
-        Default behavior is to start at min, but if step is negative, elements will start at max and proceed downward.
-        Stop is excluded.
+        Default behavior is to start at min, but if step is negative, elements will start at max and proceed downward. Stop is included.
         
         - Case 1: step and n_max are both provided.
         - Case 2: If only n_max is provided, step is calculated by dividing the domain into n_max - 1 units such that exactly n_max elements (including min and max) are returned.
@@ -59,26 +57,37 @@ class Domain(ABC, Generic[T]):
             min = max
             max = temp
         
-        sample_min = min if step > 0 else (-1 * min)
-        sample_max = max if step > 0 else (-1 * max)
+        sample_min = min
+        sample_max = max
+        if step is not None and step < 0:
+            sample_min = -min
+            sample_max = -max
         sample_step = step
-        sample_n_max = round(n_max) if n_max is not None else None
+        sample_n_max = round(n_max) if n_max != None else None
+
+        if sample_n_max == 1:
+            return [sample_min]
         
         if step != None and n_max != None:  # Case 1
-            raw_n = (sample_max - sample_min) // step
-            scale_factor = raw_n // n_max
+            raw_n = ((sample_max - sample_min) // step) + 1
+            scale_factor = raw_n // (sample_n_max - 1)
             sample_step = step * scale_factor
         elif step == None and n_max != None:  # Case 2
             sample_step = (max - min) / (sample_n_max - 1)
-            # alternatively, return np.linspace(start=self.min(), stop=self.max(), num=round(n_max))
         elif step != None and n_max == None:  # Case 3
             pass
         else:  # Case 4
-            fractional_part = (self.max - self.min) % 1
+            fractional_part = (sample_max - sample_min) % 1
             simplified_fraction = Fraction.from_float(fractional_part).limit_denominator()
             sample_step = float(Fraction(1, simplified_fraction.denominator).limit_denominator())
         
-        return np.arange(start=sample_min, stop=sample_max, step=sample_step).tolist()
+        if sample_step == 0:
+            return [sample_min]
+        
+        num = (round(((sample_max - sample_min) / sample_step)) + 1)
+        sampled_values = np.linspace(start=sample_min, stop=sample_max, num=num).tolist()
+
+        return sampled_values
 
 
 class ContinuousDomain(Domain[T]):
@@ -95,12 +104,12 @@ class ContinuousDomain(Domain[T]):
     def max(self) -> T:
         return self._max
 
-    def random_sample(self, dims: int = 1) -> List[T]:
+    def random_sample(self, n) -> List[T]:
         """Draw random samples from a uniform distribution. Replacement is possible, but unlikely for continuous domains."""
-        return np.random.uniform(self.min, self.max, size=dims).tolist()
+        return np.random.uniform(self.min, self.max, size=n).tolist()
 
     def systematic_sample(self, step, n_max):
-        return list(super().systematic_sample(self.min, self.max, step, n_max))
+        return list(super()._systematic_sample_from_range(self.min, self.max, step, n_max))
 
 
 class DiscreteRangeDomain(Domain[T]):  # should probably make this an int
@@ -125,7 +134,7 @@ class DiscreteRangeDomain(Domain[T]):  # should probably make this an int
     def random_sample(self, n: int = None, with_replacement: bool = True) -> List[T]:
         """Return a random sample of values from the range. If n is not provided, return all values."""
         list_length = (self.max - self.min) // self.unit
-        indices = super().systematic_sample(0, self.unit, list_length)
+        indices = super()._systematic_sample_from_range(0, self.unit, list_length)
 
         chosen_indices = list(indices).copy()
         if n != None:
@@ -139,7 +148,7 @@ class DiscreteRangeDomain(Domain[T]):  # should probably make this an int
         When provided, step is rounded to the nearest multiple of this domain's actual step.
         Otherwise, it is assumed to equal the domain's step.
         """
-        return list(super().systematic_sample(self.min, self.max, step, n_max))
+        return list(super()._systematic_sample_from_range(self.min, self.max, step, n_max))
     
 
 class CategoricalDomain(Domain[T]):
@@ -161,5 +170,6 @@ class CategoricalDomain(Domain[T]):
 
     def systematic_sample(self, step: int = None, n_max: int = None) -> List[T]:
         """Return evenly indexed samples."""
-        indices = super().systematic_sample(0, len(self._values) - 1, round(step), n_max)
+        sample_step = round(step) if step != None else 1
+        indices = super()._systematic_sample_from_range(0, len(self._values) - 1, sample_step, n_max)
         return [self._values[int(i)] for i in indices]
