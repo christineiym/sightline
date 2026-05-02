@@ -33,52 +33,63 @@ class Model(ABC):
         return self._pool_size
     
     def run_test(self, input_csv_path: str, id_column: str, user_prompt: str, output_csv_path: str, \
-                    system_prompt=None, temperature=None, start_at: int = 0, limit_test: int = None, \
-                    image_column: str = None, image_delimiter: str = ",", image_dir: str = None) -> None:
-        """Given user_prompt / system_prompt and paths to per-item image input, 
-        send test question(s) to the model, and write results to output_csv_path.
+                    system_prompt: str = None, temperature: float = None, start_at_index: int = 0, end_before_index: int = None, \
+                    image_column: str = None, image_delimiter: str = ",", repeated_text_only: bool = False) -> None:
+        """Given user_prompt / system_prompt and paths to per-item image input, send test question(s) to the model, 
+        and write results to output_csv_path.
+
         """
         rows = []
-        # Open CSV
         raw_table = pd.read_csv(input_csv_path, encoding='utf-8')
-        if (id_column not in raw_table.columns):
+        if (id_column not in raw_table.columns):  # future: auto-numbering
             raise Exception("id_column not found in fieldnames")
-        if image_column is not None and (image_column not in raw_table.columns):
-            # collapse to one entry per image
-            image_table = raw_table[[id_column, image_column]]
-            image_table = image_table.drop_duplicates()
-            rows = image_table.to_dict("records")
-    
-        i = 0
-        while i < len(rows):
-            if i < start_at:
-                i += 1
-                continue
-            if i > limit_test:
-                break
+        else:
+            if repeated_text_only:  # an edge case
+                no_dups_table = raw_table[[id_column]]
+                no_dups_table = no_dups_table.drop_duplicates()
+                rows = no_dups_table.to_dict("records")
+            else:
+                if (image_column not in raw_table.columns):
+                    raise Exception("image_column not found in fieldnames")
+                else:  # average case
+                    no_dups_table = raw_table[[id_column, image_column]]
+                    no_dups_table = no_dups_table.drop_duplicates()
+                    rows = no_dups_table.to_dict("records")
             
-            if image_column is not None and image_dir is not None:
-                paths = str(rows[i][image_column]).split(sep=image_delimiter)
-                open_images: list[str] = self._open_images(paths)
-
-                # send request and receive raw response (will clean response at Grader)
-                raw_response, start_datetime, end_datetime = self.basic_single_request( \
-                    system_prompt=system_prompt, user_prompt=user_prompt, temperature=None, \
-                    image_list=open_images)
-                # print(f"Image {i} is complete")
-             
-            # Save data to CSV (no writer conflicts when sequential)
+            # Save data to CSV while running (no writer conflicts when sequential)
+            file_is_new = not os.path.exists(output_csv_path)
+            CSV_HEADERS = ['id', 'raw_response', 'request_start', 'request_end']
             with open(output_csv_path, 'a', newline='') as file:
                 writer = csv.writer(file)
-                if os.stat(output_csv_path).st_size == 0:
-                    CSV_HEADERS = ['img_index', 'raw_response', 'request_start', 'request_end']
+                if file_is_new:
                     writer.writerow(CSV_HEADERS)
-                # Write the list as a new row to the CSV file  ## future: unpack the given metadata
-                current_row = [rows[i][id_column], raw_response, start_datetime, end_datetime]
-                writer.writerow(current_row)
-            
-            i += 1
+                    
+                i = 0
+                while i < len(rows):
+                    if i < start_at_index:
+                        i += 1
+                        continue
+                    if end_before_index is not None and i >= end_before_index:
+                        break
 
+                    if repeated_text_only:
+                        image_list = []
+                    else:
+                        paths = str(rows[i][image_column]).split(sep=image_delimiter)
+                        image_list: list[str] = self._open_images(paths)
+                    
+                    # send request and receive raw response (will clean response at Grader)
+                    raw_response, start_datetime, end_datetime = self.basic_single_request( \
+                        system_prompt=system_prompt, user_prompt=user_prompt, temperature=temperature, \
+                        image_list=image_list)
+                    # print(f"{i} is complete")
+                    
+                    # Write the list as a new row to the CSV file  ## future: unpack the given metadata
+                    current_row = [rows[i][id_column], raw_response, start_datetime, end_datetime]
+                    writer.writerow(current_row)
+
+                    i += 1
+                
     @abstractmethod
     def basic_single_request(self, user_prompt, system_prompt=None, temperature=None, image_list=[], complete_res_to_stdout: bool = False):
         pass
@@ -115,7 +126,7 @@ class OllamaModel(Model):
         if image_list is not None and len(image_list) > 0:
             user_message.update({'images': image_list})
         messages.append(user_message)
-        if system_prompt != None:
+        if system_prompt is not None:
             system_message = {
                 'role': 'system',
                 'content': system_prompt
@@ -124,7 +135,7 @@ class OllamaModel(Model):
         
         # set options
         options={}
-        if temperature != None:
+        if temperature is not None:
             options.update({'temperature': float(temperature)})
 
         # send basic request and receive response
@@ -181,7 +192,7 @@ class OpenAIModel(Model):
             user_messages.update({'content': user_messages['content'] + images})
         
         messages.append(user_messages)
-        if system_prompt != None:
+        if system_prompt is not None:
             system_messages = {
                 "role": "system",
                 "content": [

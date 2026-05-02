@@ -63,18 +63,18 @@ class Domain(ABC, Generic[T]):
             sample_min = -min
             sample_max = -max
         sample_step = step
-        sample_n_max = round(n_max) if n_max != None else None
+        sample_n_max = round(n_max) if n_max is not None else None
 
         if sample_n_max == 1:
             return [sample_min]
         
-        if step != None and n_max != None:  # Case 1
+        if step is not None and n_max is not None:  # Case 1
             raw_n = ((sample_max - sample_min) // step) + 1
             scale_factor = raw_n // (sample_n_max - 1)
             sample_step = step * scale_factor
-        elif step == None and n_max != None:  # Case 2
+        elif step is None and n_max is not None:  # Case 2
             sample_step = (max - min) / (sample_n_max - 1)
-        elif step != None and n_max == None:  # Case 3
+        elif step is not None and n_max is None:  # Case 3
             pass
         else:  # Case 4
             fractional_part = (sample_max - sample_min) % 1
@@ -137,7 +137,7 @@ class DiscreteRangeDomain(Domain[T]):  # should probably make this an int
         indices = super()._systematic_sample_from_range(0, self.unit, list_length)
 
         chosen_indices = list(indices).copy()
-        if n != None:
+        if n is not None:
             chosen_indices = random.choices(indices, k=n) if with_replacement or n > len(chosen_indices) \
                 else random.sample(indices, k=n)
         return [index * self.unit for index in chosen_indices]
@@ -170,6 +170,6 @@ class CategoricalDomain(Domain[T]):
 
     def systematic_sample(self, step: int = None, n_max: int = None) -> List[T]:
         """Return evenly indexed samples."""
-        sample_step = round(step) if step != None else 1
+        sample_step = round(step) if step is not None else 1
         indices = super()._systematic_sample_from_range(0, len(self._values) - 1, sample_step, n_max)
         return [self._values[int(i)] for i in indices]
