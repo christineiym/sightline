@@ -7,6 +7,8 @@ Covers:
   - ContinuousDomain, DiscreteRangeDomain, CategoricalDomain individually.
 
 Run with: pytest tests/unit/domains_tests.py
+
+AI use disclosure: This was written with assistance from Claude Sonnet 4.6.
 """
 import math
 import pytest

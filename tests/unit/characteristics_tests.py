@@ -2,6 +2,8 @@
 Unit tests for sightline/characteristics.py
 
 Run with: pytest tests/unit/characteristics_tests.py
+
+AI use disclosure: This was written with assistance from Claude Sonnet 4.6.
 """
 import pytest
 from unittest.mock import MagicMock

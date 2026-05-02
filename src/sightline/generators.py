@@ -33,7 +33,10 @@ class Generator(ABC):
         return out_csv
 
     def generate_image_metadata(self, out_dir: str, pair: bool, repetitions_per_combination, characteristics: dict[str, list[Characteristic]], step, n=None) -> list[dict]:
-        """Generate metadata for images in the set."""
+        """Generate metadata for images in the set.
+        
+        Note that, when systematic samples are drawn, the same set of random values is used across each sytematic sample value.
+        """
         # Unpack and set dataset-wide constants.
         default_values = {}
         if FIELD_DEFAULT in characteristics.keys():
@@ -48,10 +51,9 @@ class Generator(ABC):
             actual_n = None if n is None else n[index]
             categories = item.get_systematic_sample(n_max=actual_n, step=step[index])
             systematic_values.update({item.name: list(categories)})
-        names = list(systematic_values.keys())
-        value_lists = list(systematic_values.values())
-        print(systematic_values)
-        systematic_values_flattened = [dict(zip(names, item)) for item in itertools.product(*value_lists)]  # cross product along category values
+        names_systematic = list(systematic_values.keys())
+        value_lists_systematic = list(systematic_values.values())
+        systematic_values_flattened = [dict(zip(names_systematic, item)) for item in itertools.product(*value_lists_systematic)]  # cross product along category values
         # Future: What about stratified random sampling?
 
         ## The randomized ones where there is one value per image
@@ -63,33 +65,37 @@ class Generator(ABC):
                 random_values.update({item.name: item.get_random_sample(expected_total)})
             else:
                 other_random_values.append(item)
+        names_random = list(random_values.keys())
+        value_lists_random = list(random_values.values())
+        random_values_flattened = [dict(zip(names_random, item)) for item in itertools.product(*value_lists_random)]  # cross product along category values
 
         current_index = 0  # future: validate against expected_total. Better indexing?
         all_rows = []
-        for test_combination in systematic_values_flattened:
-            i = 0
-            while i < repetitions_per_combination:
-                current_info = {  
-                    "img_index": current_index,
-                    "base_filename": f"{current_index:05d}",
-                    "images": f"{current_index:05d}_a.png|{current_index:05d}_b.png",
-                    **default_values,  # technically this could be moved outside the loop
-                    **random_values,  # also this
-                    **test_combination
-                }
+        for test_combination_systematic in systematic_values_flattened:
+            for test_combination_random in random_values_flattened:
+                i = 0
+                while i < repetitions_per_combination:
+                    current_info = {  
+                        "img_index": current_index,
+                        "base_filename": f"{current_index:05d}",
+                        "images": f"{current_index:05d}_a.png|{current_index:05d}_b.png",
+                        **default_values,  # technically this could be moved outside the loop
+                        **test_combination_systematic,
+                        **test_combination_random
+                    }
 
-                # Generate image contents as rows
-                row_info, spare_characteristics = self.generate_contents(pair=pair, 
-                    constants=current_info, random_characteristics=other_random_values)
-                
-                # Generate image pair from its rows' metadata
-                self.generate_image(out_dir=out_dir, pair=pair, object_info=row_info, **current_info)
-                
-                # Collect info for the output file
-                all_rows.extend(row_info)
-                
-                i += 1
-                current_index += 1
+                    # Generate image contents as rows
+                    row_info, spare_characteristics = self.generate_contents(pair=pair, 
+                        constants=current_info, random_characteristics=other_random_values)
+                    
+                    # Generate image pair from its rows' metadata
+                    self.generate_image(out_dir=out_dir, pair=pair, object_info=row_info, **current_info)
+                    
+                    # Collect info for the output file
+                    all_rows.extend(row_info)
+                    
+                    i += 1
+                    current_index += 1
 
         return all_rows
     
